@@ -1,4 +1,4 @@
-name: Test and Deploy to VPS
+name: CI/CD Pipeline - Tests & Deployment
 
 on:
   push:
@@ -6,48 +6,48 @@ on:
   pull_request:
     branches: [ "main" ]
 
-concurrency:
-  group: deploy-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
-  # ─────────────── tests unitaires ───────────────
   test:
-    name: Tests unitaires (PHPUnit)
     runs-on: ubuntu-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v5
 
-    - name: Set up PHP
+    steps:
+    - name: Récupération du code source
+      uses: actions/checkout@v4
+
+    - name: Configuration de PHP 8.5
       uses: shivammathur/setup-php@v2
       with:
-        php-version: '8.2'
-        extensions: pdo, pdo_sqlite, sqlite3
+        php-version: '8.5'
+        extensions: mbstring, xml, ctype, iconv, sqlite3, pdo_sqlite
         coverage: none
 
-    - name: Install dependencies (PHPUnit)
-      run: composer install --no-interaction --prefer-dist --no-progress
+    - name: Installation des dépendances (Composer)
+      uses: ramsey/composer-install@v3
 
-    - name: Run PHPUnit
-      run: vendor/bin/phpunit --configuration phpunit.xml
+    - name: Exécution des tests unitaires
+      run: |
+        if [ -f "phpunit.xml" ] || [ -f "phpunit.xml.dist" ]; then
+          vendor/bin/phpunit --colors=always
+        else
+          echo "Aucun fichier phpunit.xml détecté."
+          exit 1
+        fi
 
-  # ─────────────── déploiement sur le VPS ───────────────
   deploy:
-    name: Deploy to VPS
     runs-on: ubuntu-latest
-    needs: test                       # bloqué si les tests échouent
+    needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v5
 
-    - name: Set up SSH Key
-      uses: webfactory/ssh-agent@v0.10.0
+    steps:
+    - name: Récupération du code source
+      uses: actions/checkout@v4
+
+    - name: Configuration de la clé SSH
+      uses: webfactory/ssh-agent@v0.9.0
       with:
         ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-    - name: Deploy via SSH
+    - name: Déploiement sur le VPS
       env:
         VPS_IP: ${{ secrets.VPS_IP }}
         VPS_USER: ${{ secrets.VPS_USER }}
