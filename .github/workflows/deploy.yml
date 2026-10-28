@@ -1,10 +1,10 @@
-name: CI/CD Pipeline - Tests & Deployment
+name: CI/CD Pipeline - Staging & Production
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "staging", "main" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "staging", "main" ]
 
 jobs:
   test:
@@ -33,7 +33,34 @@ jobs:
           exit 1
         fi
 
-  deploy:
+  deploy-staging:
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
+
+    steps:
+    - name: Récupération du code source
+      uses: actions/checkout@v4
+
+    - name: Configuration de la clé SSH
+      uses: webfactory/ssh-agent@v0.9.0
+      with:
+        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+    - name: Déploiement sur Staging (VPS)
+      env:
+        VPS_IP: ${{ secrets.VPS_IP }}
+        VPS_USER: ${{ secrets.VPS_USER }}
+      run: |
+        mkdir -p ~/.ssh
+        echo "StrictHostKeyChecking no" >> ~/.ssh/config
+        ssh $VPS_USER@$VPS_IP << 'EOF'
+          cd /var/www/ALTF4_staging
+          git pull origin staging
+          sudo chown -R www-data:www-data /var/www/ALTF4_staging
+        EOF
+
+  deploy-production:
     runs-on: ubuntu-latest
     needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -47,7 +74,7 @@ jobs:
       with:
         ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-    - name: Déploiement sur le VPS
+    - name: Déploiement sur Production (VPS)
       env:
         VPS_IP: ${{ secrets.VPS_IP }}
         VPS_USER: ${{ secrets.VPS_USER }}
